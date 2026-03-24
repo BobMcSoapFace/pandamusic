@@ -1,12 +1,14 @@
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:pandamusic/components/videoplayer/videomanager.dart';
+import 'package:pandamusic/data/streams/videomanager.dart';
 import 'package:pandamusic/data/colors.dart';
+import 'package:pandamusic/data/responsive.dart';
 
 // ignore: non_constant_identifier_names
 AppPlaylistPlayer AppVideoPlayer({
@@ -38,15 +40,19 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
     player,
     configuration: VideoControllerConfiguration()
   );
+  String cachedName = "Music Title";
   double _currentVolume = 100;
   double playbackPercent = 0;
   int? playbackDuration;
   int playbackPosition = 0;
   int videoIndex = 0;
+  int skipbackLength = 5000;
   bool videoIsPlaying = false;
   bool volumeMuted = false;
+  bool videoLoops = false;
   final double _maxVolume = 200;
   late StreamSubscription<Duration> _durationListener;
+  late StreamSubscription<Duration> _positionListener;
   late StreamSubscription<bool> _playingListener;
   late StreamSubscription<int> _indexListener;
   
@@ -78,13 +84,17 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
       (isPlaying){
         setState(() {
           videoIsPlaying = isPlaying;
-          if(!isPlaying && playbackDuration != null && playbackPosition >= playbackDuration!){
-            
-          }
+          if(!isPlaying && playbackDuration != null && (playbackPosition >= playbackDuration! - 500)){
+            if(videoLoops){
+              player.play();
+            } else if(videoIndex<widget.videoList.length-1) {
+              widget.manager.emitIndex(videoIndex+1);
+            }
+          } 
         });
       }
     );
-    player.stream.position.listen(
+    _positionListener = player.stream.position.listen(
       (duration){
         setState(() {
           playbackPosition = duration.inMilliseconds;
@@ -92,9 +102,11 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
         });
       }
     );
-    widget.manager.videoIndexStream.listen((newIndex){
+    _indexListener = widget.manager.videoIndexStream.listen((newIndex) async {
+      while(newIndex >= widget.videoList.length) {await Future.delayed(Duration(milliseconds: 100));}
       setState(() {
         videoIndex = newIndex;
+        cachedName = widget.videoList[newIndex].split("\\").last;
         refreshVideoIndex(newIndex);
       });
     });
@@ -105,14 +117,20 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
     player.dispose();
     _durationListener.cancel();
     _playingListener.cancel();
+    _positionListener.cancel();
+    _indexListener.cancel();
   }
 
   @override
   Widget build(BuildContext context) {
     return 
       Container(
+        clipBehavior: Clip.hardEdge,
+        constraints: BoxConstraints(
+          minWidth: 400
+        ),
         alignment: AlignmentGeometry.center,  
-        padding: EdgeInsets.fromLTRB(2, 2, 2, 8),
+        padding: EdgeInsets.fromLTRB(2, 2, 2, !Responsive.isMobile(context) ? 8 : 2),
         decoration: BoxDecoration(
           color: AppColor.scheme(context).primary,
           borderRadius: BorderRadius.circular(5)
@@ -154,35 +172,55 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
               SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 spacing: 10,
                 children: [
-                  ...List.generate(3, (i)=>i).map((i)=>
+                  ...List.generate(5, (i)=>i).map((i)=>
                   Material(
                     color: AppColor.scheme(context).primary,
                     shape: CircleBorder(),
                     child: InkWell(
+                      borderRadius: BorderRadius.circular(200),
                       onTap: () {
-                        if(i == 0 || i == 2){
-                          if(videoIndex > 0 && i == 0){
-                            widget.manager.emit(videoIndex-1);
-                          } else if (i == 2 && videoIndex < widget.videoList.length-1){
-                            widget.manager.emit(videoIndex+1);
+                        if(i == 1 || i == 3){
+                          if(videoIndex > 0 && i == 1){
+                            widget.manager.emitIndex(videoIndex-1);
+                          } else if (i == 3 && videoIndex < widget.videoList.length-1){
+                            widget.manager.emitIndex(videoIndex+1);
                           } else {
                             return;
                           }
-                        } else if(i == 1){
+                        } else if(i == 2){
                           setState(() {
                             player.playOrPause();
                           });
+                        } else if (playbackDuration == null){
+                          return;
+                        } else if(i == 4 || i == 0){
+                          player.seek(Duration(milliseconds: 
+                            i == 0 ? (playbackPosition - skipbackLength > 0 ? playbackPosition - skipbackLength : 0)
+                            : (playbackPosition + skipbackLength < playbackDuration! ? playbackPosition + skipbackLength : playbackDuration!)));
                         }
                       },
-                      child: Icon(
-                        i == 1 ? (videoIsPlaying ? Icons.pause : Icons.play_arrow)
-                        : i == 2 ? Icons.skip_next 
-                        : i == 0 ? Icons.skip_previous
+                      child: 
+                      i >= 1 && i <= 3 ? Icon(
+                        i == 1 ? Icons.skip_previous 
+                        : i == 2 ? (videoIsPlaying ? Icons.pause : Icons.play_arrow)
+                        : i == 3 ? Icons.skip_next 
                         : Icons.error,
+                        size : 30,
                         color: AppColor.scheme(context).onPrimary,
-                      ),
+                      ) : Container(
+                        padding: EdgeInsets.all(5),
+                        child: Image(
+                          image: AssetImage(
+                            i == 0 ? (skipbackLength == 5000 ? "assets/icons8-replay-5-48.png" : "assets/icons8-replay-10-48.png")
+                            : (skipbackLength == 5000 ? "assets/icons8-forward-5-48.png" : "assets/icons8-forward-10-48.png"),
+                          ),
+                          width: 22,
+                          height: 22,
+                        ),
+                      )
                     ),
                   ))
                 ],
@@ -190,9 +228,9 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
               SizedBox(height: 7),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text("Azari - Sell a Friend ⧸ 重音テト [yJ1hNjuAKtM]",
+                child: Text(cachedName,
                   style: GoogleFonts.googleSans(
-                    fontSize: 20
+                    fontSize: !Responsive.isMobile(context) ? 20 : 16
                   ),
                 ),
               ),
@@ -207,61 +245,123 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
                 height: 40,
                 padding: EdgeInsets.symmetric(horizontal: 0),
                 child: 
-                Row(
+                Flex(
+                  spacing: 8,
+                  direction: Axis.horizontal,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Material(
-                      color: AppColor.scheme(context).primary,
-                      child: InkWell(
-                        onTap: (){
-                          setState(() {
-                            if(!volumeMuted){
-                              volumeMuted = true;
-                              player.setVolume(0);
-                            } else {
-                              volumeMuted = false;
-                              player.setVolume(_currentVolume);
-                            }
-                          });
-                        },
-                        child: Icon(
-                          _currentVolume <= 3 || volumeMuted ? Icons.volume_off : 
-                          _currentVolume >= 133 ? Icons.volume_up : 
-                          _currentVolume <= 67 ? Icons.volume_mute :
-                          Icons.volume_down,
-                          color: AppColor.scheme(context).onPrimary,
-                        ),
-                      ),
-                    ),
-                    Material(
-                      color: AppColor.scheme(context).primary,
-                      child: SliderTheme(
-                        data: SliderThemeData(
-                          thumbSize: WidgetStatePropertyAll(
-                            Size(4, 24)
-                          ),
-                          valueIndicatorTextStyle: GoogleFonts.googleSans(
+                    Flexible(
+                      flex: 6,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Material(
                             color: AppColor.scheme(context).primary,
-                            fontSize: 12
-                          )
-                        ), 
-                        child:  Slider(
-                          value: !volumeMuted ? _currentVolume : 0,
-                          activeColor: AppColor.scheme(context).onPrimary,
-                          onChanged: (newValue)=>setState((){
-                            volumeMuted = false;
-                            _currentVolume=newValue;
-                            player.setVolume(newValue);
-                          }),
-                          padding: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                          year2023: false,
-                          label: "${_currentVolume.toStringAsFixed(0)}%",
-                          secondaryActiveColor: AppColor.scheme(context).primary,
-                          max: _maxVolume,
-                        ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(200),
+                              onTap: (){
+                                setState(() {
+                                  if(!volumeMuted){
+                                    volumeMuted = true;
+                                    player.setVolume(0);
+                                  } else {
+                                    volumeMuted = false;
+                                    player.setVolume(_currentVolume);
+                                  }
+                                });
+                              },
+                              child: Icon(
+                                _currentVolume <= 3 || volumeMuted ? Icons.volume_off : 
+                                _currentVolume >= 133 ? Icons.volume_up : 
+                                _currentVolume <= 67 ? Icons.volume_mute :
+                                Icons.volume_down,
+                                color: AppColor.scheme(context).onPrimary,
+                              ),
+                            ),
+                          ),
+                          Material(
+                            color: AppColor.scheme(context).primary,
+                            child: SliderTheme(
+                              data: SliderThemeData(
+                                thumbSize: WidgetStatePropertyAll(
+                                  Size(4, 24)
+                                ),
+                                valueIndicatorTextStyle: GoogleFonts.googleSans(
+                                  color: AppColor.scheme(context).primary,
+                                  fontSize: 12
+                                ),
+                                showValueIndicator: ShowValueIndicator.onDrag
+                              ), 
+                              child: Slider(
+                                value: !volumeMuted ? _currentVolume : 0,
+                                activeColor: AppColor.scheme(context).onPrimary,
+                                onChanged: (newValue)=>setState((){
+                                  volumeMuted = false;
+                                  _currentVolume=newValue;
+                                  player.setVolume(newValue);
+                                }),
+                                padding: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                // ignore: deprecated_member_use
+                                year2023: false,
+                                label: "${_currentVolume.toStringAsFixed(0)}%",
+                                secondaryActiveColor: AppColor.scheme(context).primary,
+                                max: _maxVolume,
+                              ),
+                            )
+                          ),
+                          Material(
+                            color: AppColor.scheme(context).primary,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(200),
+                              onTap: () {
+                                setState(() {
+                                  videoLoops = !videoLoops;
+                                });
+                              },
+                              child: Icon(
+                                !videoLoops ? Icons.loop_rounded : Icons.check,
+                                color: AppColor.scheme(context).onPrimary,
+                                size: !Responsive.isMobile(context) ? 24 : 20,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: !Responsive.isMobile(context) ? 8 : 5,),
+                          Material(
+                            color: AppColor.scheme(context).primary,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(200),
+                              onTap: () {
+                                setState(() {
+                                  skipbackLength = skipbackLength == 5000 ? 10000 : 5000;
+                                });
+                              },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadiusGeometry.circular(200),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1,
+                                    strokeAlign: BorderSide.strokeAlignOutside
+                                  )
+                                ),
+                                width: 24,
+                                height: 24,
+                                child: Text(
+                                  (skipbackLength/1000).toInt().toString(),
+                                  style: GoogleFonts.googleSans(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: !Responsive.isMobile(context) ? 14 : 10,
+                                    color: AppColor.scheme(context).onPrimary,
+                                  ),
+                                ),
+                              )
+                            ),
+                          ),
+                        ],
                       )
-                    ),
+                    )
                   ],
                 )
               )
