@@ -12,12 +12,16 @@ class PlaylistViewer extends StatefulWidget {
   final AppVideoManager videoManager;
   final MusicSortType sortType;
   final void Function(MusicSortType) setSortType;
+  final bool shuffle;
+  final void Function(bool) setShuffle; 
   const PlaylistViewer({
     super.key, 
     required this.videoList, 
     required this.videoManager, 
     required this.sortType, 
-    required this.setSortType
+    required this.setSortType, 
+    required this.shuffle, 
+    required this.setShuffle
   });
   @override
   State<StatefulWidget> createState() => PlaylistViewerState();
@@ -109,7 +113,25 @@ class PlaylistViewerState extends State<PlaylistViewer>{
                       ),
                     )
                   ),
-                )
+                ),
+                Row(children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: ()=>widget.setShuffle(!widget.shuffle),
+                      borderRadius: BorderRadius.circular(200),
+                      child: Container(
+                        
+                        padding: EdgeInsets.all(8),
+                        child: Icon(
+                          !widget.shuffle ? Icons.shuffle : Icons.check,
+                          color: AppColor.scheme(context).onPrimary,
+                          size: 22,
+                        ),
+                      )
+                    ),
+                  ),
+                ])
               ],
             )
           ),

@@ -1,7 +1,6 @@
 
 import 'dart:async';
-import 'dart:io';
-
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:media_kit/media_kit.dart';
@@ -24,22 +23,25 @@ class AppPlaylistPlayer extends StatefulWidget {
   final List<String> videoList;
   final AppVideoManager manager;
   final bool isFile;
+  final bool shuffle;
   const AppPlaylistPlayer({
     super.key,
     required this.videoList,
     required this.manager,
-    required this.isFile, 
+    required this.isFile,
+    this.shuffle = false, 
   });
   @override
   AppPlaylistPlayerState createState() => AppPlaylistPlayerState();
 }
 class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
+  static final Random rand = Random();
   static final durationBarFidelity = 10000;
-  late final player = Player();
   late final controller = VideoController(
     player,
     configuration: VideoControllerConfiguration()
   );
+  final player = Player();
   String cachedName = "Music Title";
   double _currentVolume = 100;
   double playbackPercent = 0;
@@ -50,6 +52,8 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
   bool videoIsPlaying = false;
   bool volumeMuted = false;
   bool videoLoops = false;
+  int videoHistoryIndex = 0;
+  List<String> videoHistory = [];
   final double _maxVolume = 200;
   late StreamSubscription<Duration> _durationListener;
   late StreamSubscription<Duration> _positionListener;
@@ -60,16 +64,57 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
     return "${(seconds/60).toInt() < 10 ? "0":""}${(seconds/60).toInt()}:${(seconds%60).toInt() < 10 ? "0":""}${(seconds%60).toInt()}";
   }
 
-  void refreshVideoIndex(int index){
+  int getShuffledIndex(){
+    if(widget.videoList.length <= 1){
+      return 0;
+    }
+    int newIndex = videoIndex;
+    while(newIndex == videoIndex){
+      newIndex = rand.nextInt(widget.videoList.length);
+    }
+    return newIndex;
+  }
+  void refreshVideoIndex(
+    int index,
+    {bool newHistory = true
+  }){
     player.open(Media((widget.isFile ? "file:///":"") + widget.videoList[index].replaceAll("\\", "/")));
-    playbackPosition = 0;
-    playbackPercent = 0;
+    setState(() {
+      playbackPosition = 0;
+      playbackPercent = 0;
+      cachedName = getFileName(widget.videoList[index]);
+    });
+    if(newHistory){
+      videoHistory.add(widget.videoList[index]);
+      videoHistoryIndex = videoHistory.length-1;
+    }
+  }
+  void refreshVideoIndexByPath(
+    String path,
+    {bool newHistory = true
+  }) async {
+    player.open(Media((widget.isFile ? "file:///":"") + path.replaceAll("\\", "/")));
+    setState(() {
+      playbackPosition = 0;
+      playbackPercent = 0;
+      cachedName = getFileName(path);
+    });
+    if(newHistory){
+      videoHistory.add(path);
+      videoHistoryIndex = videoHistory.length-1;
+    }
+    if(!widget.videoList.contains(path)){
+      while(!widget.videoList.contains(path)) {await Future.delayed(Duration(milliseconds: 100));}
+      setState(() {
+        videoIndex = widget.videoList.indexOf(path);
+      });
+    }
   }
   @override
   void initState() {
     super.initState();
     if(widget.videoList.isNotEmpty){
-      player.open(Media((widget.isFile ? "file:///":"") + widget.videoList[videoIndex]));
+      refreshVideoIndex(videoIndex, newHistory: false);
     }
     player.pause();
     player.setVolume(_currentVolume);
@@ -87,10 +132,17 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
           if(!isPlaying && playbackDuration != null && (playbackPosition >= playbackDuration! - 500)){
             if(videoLoops){
               player.play();
+            } else if(widget.shuffle && (widget.videoList.length > 1)){
+              if(videoHistoryIndex < videoHistory.length-1){
+                videoHistoryIndex+=1;
+                refreshVideoIndexByPath(videoHistory[videoHistoryIndex], newHistory: false);
+              } else {
+                widget.manager.emitIndex(getShuffledIndex());
+              }
             } else if(videoIndex<widget.videoList.length-1) {
               widget.manager.emitIndex(videoIndex+1);
             }
-          } 
+          }
         });
       }
     );
@@ -106,7 +158,6 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
       while(newIndex >= widget.videoList.length) {await Future.delayed(Duration(milliseconds: 100));}
       setState(() {
         videoIndex = newIndex;
-        cachedName = widget.videoList[newIndex].split("\\").last;
         refreshVideoIndex(newIndex);
       });
     });
@@ -183,7 +234,19 @@ class AppPlaylistPlayerState extends State<AppPlaylistPlayer> {
                       borderRadius: BorderRadius.circular(200),
                       onTap: () {
                         if(i == 1 || i == 3){
-                          if(videoIndex > 0 && i == 1){
+                          if(widget.shuffle){
+                            if(i == 1 && videoHistoryIndex > 0){
+                              videoHistoryIndex-=1;
+                              refreshVideoIndexByPath(videoHistory[videoHistoryIndex], newHistory: false);
+                            } else if(i==3) {
+                              if(videoHistoryIndex < videoHistory.length-1){
+                                videoHistoryIndex+=1;
+                                refreshVideoIndexByPath(videoHistory[videoHistoryIndex], newHistory: false);
+                              } else {
+                                widget.manager.emitIndex(getShuffledIndex());
+                              }
+                            }
+                          } else if(videoIndex > 0 && i == 1){
                             widget.manager.emitIndex(videoIndex-1);
                           } else if (i == 3 && videoIndex < widget.videoList.length-1){
                             widget.manager.emitIndex(videoIndex+1);

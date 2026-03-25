@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:pandamusic/components/downloadinterface.dart';
 import 'package:pandamusic/components/playlistviewer/playlistviewer.dart';
 import 'package:pandamusic/data/streams/videomanager.dart';
 import 'package:pandamusic/components/videoplayer/videoplayer.dart';
@@ -15,19 +17,48 @@ class MusicManagerPage extends StatefulWidget {
 }
 class MusicManagerPageState extends State<MusicManagerPage> {
   final AppVideoManager videoManager =  AppVideoManager();
-  late final Stream<FileSystemEntity> directoryStream;
-  final List<FileSystemEntity> directoryVideos = [];
+  List<FileSystemEntity> directoryVideos = [];
+  Stream<FileSystemEntity>? _directoryStream;
+  StreamSubscription<FileSystemEntity>? _directoryStreamListener;
   List<FileSystemEntity> videoList = [];
   MusicSortType videoSortType = MusicSortType.name;
-  @override
-  void initState() {
-    super.initState();
-    directoryStream = getDirectoryVideos("C:/Users/riley/Music/music")..listen((data){
+  TextEditingController folderController = TextEditingController();
+  TextEditingController urlController = TextEditingController();
+  bool shuffle = false;
+
+  void loadDirectory(
+    String? path
+  ) async {
+    if(path == null || path.isEmpty){
+      setState(() {
+        _directoryStreamListener!.cancel();
+        directoryVideos = [];
+        videoList = [];
+      });
+      return;
+    }
+    if(!await Directory(path).exists()){
+      return;
+    }
+    if(_directoryStreamListener != null){
+      setState(() {
+        _directoryStreamListener!.cancel();
+        directoryVideos = [];
+        videoList = [];
+      });
+    }
+    _directoryStream = getDirectoryVideos(path);
+    _directoryStreamListener = _directoryStream!.listen((data){
       setState((){
         directoryVideos.add(data);
         videoList.add(data);
       });
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
     videoManager.videoSortTypeStream.listen((sortType)=>setState(() {
       videoSortType = sortType;
       sortMusic(List.from(directoryVideos), sortType).then(
@@ -46,11 +77,6 @@ class MusicManagerPageState extends State<MusicManagerPage> {
 
   @override
   Widget build(BuildContext context) {
-    AppPlaylistPlayer playlistPlayer = AppPlaylistPlayer(
-      videoList: videoList.map((file)=>file.path).toList(),
-      manager: videoManager,
-      isFile: true
-    );
     return SizedBox.expand(
       child: Flex(
         direction: Axis.horizontal,
@@ -73,14 +99,21 @@ class MusicManagerPageState extends State<MusicManagerPage> {
                 spacing: 10,
                 direction: Axis.vertical,
                 children: [
-                  if(videoList.isNotEmpty) playlistPlayer,
+                  if(videoList.isNotEmpty) AppPlaylistPlayer(
+                    videoList: videoList.map((file)=>file.path).toList(),
+                    manager: videoManager,
+                    isFile: true,
+                    shuffle: shuffle,
+                  ),
                   Flexible(
                     flex: 3,
                     child: PlaylistViewer(
                       videoList: videoList,
-                      videoManager: playlistPlayer.manager,
+                      videoManager: videoManager,
                       sortType: videoSortType,
-                      setSortType: (type) => videoManager.emitSort(type),
+                      setSortType: (type) => videoManager.emitSort(type), 
+                      shuffle: shuffle, 
+                      setShuffle: (bool p1)=>setState(()=>shuffle=p1),
                     )
                   )
                 ],
@@ -93,6 +126,25 @@ class MusicManagerPageState extends State<MusicManagerPage> {
             child: Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
+              ),
+              child: Column(
+                children: [
+                  DownloadInterface(
+                    folderController: folderController, 
+                    urlController: urlController, 
+                    loadFolder: () {
+                      loadDirectory(folderController.text);
+                    }, 
+                    downloadUrl: () {
+                      downloadPlaylistVideos(
+                        urlController.text, 
+                        folderController.text
+                      ).then((result){
+                        print(result);
+                      });
+                    },
+                  ),
+                ],
               ),
             )
           )

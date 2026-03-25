@@ -32,7 +32,7 @@ class PlaylistTabState extends State<PlayListTab> {
         srcFile: widget.videoFile.path.replaceAll("/", "\\"),
         width: 50,
         height: 50,
-        quality: 25, 
+        quality: 70, 
         format: "jpeg",
       ).then(
         (bytes){
