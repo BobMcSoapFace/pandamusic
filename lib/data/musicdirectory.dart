@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:serious_python/serious_python.dart';
 
+const String DIRECTORY_COLLECTION = "MediaDirectories";
 Stream<FileSystemEntity> getDirectoryVideos(
   String directoryPath
 ){

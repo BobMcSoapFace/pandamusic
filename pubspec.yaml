@@ -40,6 +40,7 @@ dependencies:
   media_kit_libs_video: ^1.0.7
   fc_native_video_thumbnail: ^2.1.1
   serious_python: ^0.9.11
+  localstore: ^1.4.0
 
 dev_dependencies:
   flutter_test:
