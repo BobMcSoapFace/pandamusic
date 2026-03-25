@@ -16,6 +16,7 @@ class MusicManagerPage extends StatefulWidget {
   MusicManagerPageState createState() => MusicManagerPageState();
 }
 class MusicManagerPageState extends State<MusicManagerPage> {
+  static const sortLoadingSpeed = 10;
   final AppVideoManager videoManager =  AppVideoManager();
   List<FileSystemEntity> directoryVideos = [];
   Stream<FileSystemEntity>? _directoryStream;
@@ -68,7 +69,7 @@ class MusicManagerPageState extends State<MusicManagerPage> {
             while(videoSortType == sortType && ni < newList.length){
               setState(()=>videoList.add(newList[ni]));
               ni++;
-              await Future.delayed(Duration(milliseconds: 20));
+              await Future.delayed(Duration(milliseconds: sortLoadingSpeed));
             }
         }
       );

@@ -58,7 +58,7 @@ class DownloadInterfaceState extends State<DownloadInterface> {
                     showCursor: true,
                     cursorColor: AppColor.scheme(context).onPrimary,
                     decoration: InputDecoration.collapsed(
-                      hintText: "C://Users/example/Music",
+                      hintText: "C:/Users/example/Music",
                       hintStyle: GoogleFonts.googleSans(
                         fontWeight: FontWeight.w500,
                         color: AppColor.scheme(context).outlineVariant

@@ -21,7 +21,7 @@ Future<String> downloadPlaylistVideos(
   try {
     if(!(await Directory(folder).exists()) && !(await Directory(folder).parent.exists())){
       return "Download location folder does not exist.";
-    };
+    }
     await SeriousPython.run(
       "downloader/ytdownloader.zip",
       environmentVariables: {

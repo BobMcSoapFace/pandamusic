@@ -30,15 +30,15 @@ class PlaylistViewer extends StatefulWidget {
 class PlaylistViewerState extends State<PlaylistViewer>{
   late StreamSubscription<int> _indexListener;
   final ScrollController _scrollController = ScrollController();
-  int currentIndex = 0;
+  String? currentVideoPath;
 
   @override
   void initState() {
     super.initState();
-    _indexListener = widget.videoManager.videoIndexStream.listen((index)=>
-      setState(()=>
-        currentIndex=index
-      )
+    widget.videoManager.videoHistoryIndexStream.listen(
+      (videoHistoryIndex)=>setState((){
+        currentVideoPath = widget.videoManager.videoHistory[videoHistoryIndex];    
+      })
     );
   }
   @override
@@ -114,24 +114,34 @@ class PlaylistViewerState extends State<PlaylistViewer>{
                     )
                   ),
                 ),
-                Row(children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: ()=>widget.setShuffle(!widget.shuffle),
-                      borderRadius: BorderRadius.circular(200),
-                      child: Container(
-                        
-                        padding: EdgeInsets.all(8),
-                        child: Icon(
-                          !widget.shuffle ? Icons.shuffle : Icons.check,
-                          color: AppColor.scheme(context).onPrimary,
-                          size: 22,
-                        ),
-                      )
+                Row(
+                  spacing: 4,
+                  children: [
+                    Text(
+                      widget.videoList.length.toString(),
+                      style: GoogleFonts.googleSans(
+                        color: AppColor.scheme(context).onPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500
+                      ),
                     ),
-                  ),
-                ])
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: ()=>widget.setShuffle(!widget.shuffle),
+                        borderRadius: BorderRadius.circular(200),
+                        child: Container(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            !widget.shuffle ? Icons.shuffle : Icons.check,
+                            color: AppColor.scheme(context).onPrimary,
+                            size: 22,
+                          ),
+                        )
+                      ),
+                    ),
+                  ]
+                )
               ],
             )
           ),
@@ -150,7 +160,8 @@ class PlaylistViewerState extends State<PlaylistViewer>{
                         key: Key(entry.value.path),
                         videoFile: entry.value,
                         playVideo: ()=>widget.videoManager.emitIndex(entry.key),
-                        isSelectedVideo: entry.key==currentIndex,
+                        isSelectedVideo: 
+                        entry.value.path == currentVideoPath
                       ),
                     )
                   ).toList(),

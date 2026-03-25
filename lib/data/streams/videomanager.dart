@@ -16,17 +16,30 @@ String musicSortTypeToName(MusicSortType type)=>
   ][MusicSortType.values.indexOf(type)];
 class AppVideoManager {
   final StreamController<int> _videoIndexStreamController = StreamController<int>.broadcast();
-  final StreamController<MusicSortType> _videoSortTypeStreamController = StreamController<MusicSortType>();
+  final StreamController<int> _videoHistoryIndexController = StreamController<int>.broadcast();
+  final StreamController<MusicSortType> _videoSortTypeStreamController = StreamController<MusicSortType>.broadcast();
   late Stream<int> videoIndexStream;
+  late Stream<int> videoHistoryIndexStream;
   late Stream<MusicSortType> videoSortTypeStream;
+  int _videoHistoryIndex = 0;
+  int get videoHistoryIndex => _videoHistoryIndex;
+  set videoHistoryIndex(int i) {
+    _videoHistoryIndex = i;
+    notifyHistoryChange();
+  }
+  List<String> videoHistory = [];
+
   AppVideoManager(){
     videoIndexStream = _videoIndexStreamController.stream;
+    videoHistoryIndexStream = _videoHistoryIndexController.stream;
     videoSortTypeStream = _videoSortTypeStreamController.stream;
     emitIndex(0);
     emitSort(MusicSortType.name);
+    notifyHistoryChange();
   }
   void emitIndex(int index) => _videoIndexStreamController.sink.add(index);
   void emitSort(MusicSortType type) => _videoSortTypeStreamController.sink.add(type);
+  void notifyHistoryChange()=>_videoHistoryIndexController.sink.add(_videoHistoryIndex);
 }
 String getFileName(
   String path
